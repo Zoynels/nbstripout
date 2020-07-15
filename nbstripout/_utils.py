@@ -95,7 +95,8 @@ def strip_output(nb, keep_output, keep_count, extra_keys=''):
     for field in keys['metadata']:
         pop_recursive(nb.metadata, field)
 
-    for cell in _cells(nb):
+    remove_idx = []
+    for i, cell in enumerate(_cells(nb)):
         keep_output_this_cell = determine_keep_output(cell, keep_output)
 
         # Remove the outputs, unless directed otherwise
@@ -132,4 +133,42 @@ def strip_output(nb, keep_output, keep_count, extra_keys=''):
             if extra in cell:
                 for field in fields:
                     pop_recursive(getattr(cell, extra), field)
+
+        remove_empty_cells(remove_idx, cell, keep_output_this_cell, extra_keys)
+
+    # Remove empty and space/tab/newline inly cells
+    for idx in sorted(remove_idx, reverse=True):
+        if nb.nbformat >= 4:
+            del nb.cells[idx]
+
     return nb
+
+
+def remove_empty_cells(remove_idx, cell, keep_output_this_cell, extra_keys):
+    cell_copy = copy.deepcopy(cell)
+    if 'extra.cells.remove-empty-cells' not in extra_keys:
+        return 0
+
+    if keep_output_this_cell:
+        return 0
+
+    if len(cell.get('outputs', [])) != 0:
+        return 0
+    
+    if len(cell.get('metadata', [])) != 0:
+        # is not init_cell and keep_output is not True, try to remove
+        cell['metadate'].pop('init_cell', None)
+        cell['metadate'].pop('keep_output', None)
+        if len(cell.get('metadata', [])) != 0:
+            return 0
+
+    if len(cell.get('source', [])) != 0:
+        # Detect space/tab/newline only cells
+        if not 'extra.cells.remove-spaces-cells' in extra_keys:
+            return 0
+
+        for x in cell['source']:
+            if x.strip() != '':
+                return 0
+
+    remove_idx.append(i)
